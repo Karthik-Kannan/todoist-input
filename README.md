@@ -43,6 +43,14 @@ which allows roughly 15 minutes per note.
 
 Any other Node host works too (Render, Railway, Fly.io): start command `node server.js`.
 
+### Launching it fast on Android (Pixel)
+
+- Install it from Chrome's ⋮ menu > **Install app** (not just "Add to Home screen"), so it becomes a real app.
+- **Voice:** "Hey Google, open Jotter".
+- **Volume button:** a button-remapping app such as Button Mapper can map a long-press of volume down to "Open app > Jotter".
+- **Long-press the icon** for "Record" and "Type" shortcuts, which can be dragged onto the home screen.
+- Opening it, or switching back to it, always starts a fresh recording.
+
 ## 4. Switching the AI model
 
 The AI step talks to any OpenAI-compatible API, so switching is just three env vars:
