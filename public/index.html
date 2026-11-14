@@ -42,6 +42,7 @@
   <div id="status">Starting recorder…</div>
   <div id="timer" hidden>0:00</div>
   <button id="mic">Tap to record</button>
+  <button class="secondary" id="cancel" style="flex:0 0 auto;padding:10px 28px" hidden>Cancel</button>
   <div id="results"></div>
   <div class="row" id="after" hidden>
     <button class="secondary" id="undo">Undo</button>
@@ -60,7 +61,7 @@
 const $ = (id) => document.getElementById(id);
 const store = { get: (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
-let recorder, chunks = [], stream, timerId, startedAt, lastIds = [], ready = false;
+let cancelled = false, recorder, chunks = [], stream, timerId, startedAt, lastIds = [], ready = false;
 
 function status(msg, isErr) { $('status').textContent = msg; $('status').className = isErr ? 'err' : ''; }
 
@@ -80,16 +81,18 @@ async function startRecording() {
   recorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000, ...(type ? { mimeType: type } : {}) });
   chunks = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-  recorder.onstop = upload;
+  recorder.onstop = () => { if (!cancelled) upload(); };
+  cancelled = false;
   recorder.start();
   startedAt = Date.now();
-  $('timer').hidden = false; $('after').hidden = true; $('results').innerHTML = '';
+  $('timer').hidden = false; $('cancel').hidden = false; $('after').hidden = true; $('results').innerHTML = '';
   timerId = setInterval(() => { const s = Math.floor((Date.now() - startedAt) / 1000); $('timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
   $('mic').textContent = 'Tap when done'; $('mic').classList.add('rec');
   status('Listening…');
 }
 
 function stopRecording() {
+  $('cancel').hidden = true;
   clearInterval(timerId);
   $('mic').classList.remove('rec'); $('mic').disabled = true; $('mic').textContent = 'Working…';
   recorder.stop();
@@ -135,6 +138,15 @@ function render(data) {
 
 $('mic').onclick = () => (recorder && recorder.state === 'recording' ? stopRecording() : startRecording());
 $('again').onclick = startRecording;
+// Cancel: stop the mic and throw the recording away without sending anything.
+$('cancel').onclick = () => {
+  cancelled = true; clearInterval(timerId);
+  if (recorder && recorder.state === 'recording') recorder.stop();
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  $('cancel').hidden = true; $('timer').hidden = true;
+  $('mic').classList.remove('rec'); $('mic').textContent = 'Tap to record';
+  status('Discarded. Nothing was sent.');
+};
 $('undo').onclick = async () => {
   $('undo').disabled = true;
   const res = await fetch('/api/undo', { method: 'POST', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ ids: lastIds }) });
