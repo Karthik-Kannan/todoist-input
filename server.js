@@ -174,7 +174,8 @@ async function createTasks(tasks, projects) {
 }
 
 // ---------- HTTP ----------
-function readBody(req, limit = 25 * 1024 * 1024) {
+// 4.5 MB matches Vercel's request body limit.
+function readBody(req, limit = 4.5 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = []; let size = 0;
     req.on('data', (c) => { size += c.length; if (size > limit) { reject(new Error('Recording too large')); req.destroy(); } else chunks.push(c); });
@@ -210,32 +211,36 @@ async function handleJot(req, res) {
   send(res, 200, { transcript: note, tasks: created });
 }
 
-const server = http.createServer(async (req, res) => {
+// API router. Used by the local server below and by the Vercel functions in api/.
+async function handleApi(req, res) {
   try {
     const url = new URL(req.url, 'http://x');
-    if (url.pathname.startsWith('/api/')) {
-      if (cfg.passcode && req.headers['x-passcode'] !== cfg.passcode) return send(res, 401, { error: 'Wrong passcode' });
-      if (req.method === 'GET' && url.pathname === '/api/ping') return send(res, 200, { ok: true });
-      if (req.method === 'POST' && url.pathname === '/api/jot') return await handleJot(req, res);
-      if (req.method === 'POST' && url.pathname === '/api/undo') {
-        const { ids = [] } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-        for (const id of ids) await todoist('DELETE', `/tasks/${encodeURIComponent(id)}`);
-        return send(res, 200, { deleted: ids.length });
-      }
-      return send(res, 404, { error: 'Not found' });
+    if (cfg.passcode && req.headers['x-passcode'] !== cfg.passcode) return send(res, 401, { error: 'Wrong passcode' });
+    if (req.method === 'GET' && url.pathname === '/api/ping') return send(res, 200, { ok: true });
+    if (req.method === 'POST' && url.pathname === '/api/jot') return await handleJot(req, res);
+    if (req.method === 'POST' && url.pathname === '/api/undo') {
+      const { ids = [] } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      for (const id of ids) await todoist('DELETE', `/tasks/${encodeURIComponent(id)}`);
+      return send(res, 200, { deleted: ids.length });
     }
-    // static files
-    const rel = url.pathname === '/' ? '/index.html' : url.pathname;
-    const file = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
-    if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-      res.writeHead(404); return res.end('Not found');
-    }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    fs.createReadStream(file).pipe(res);
+    return send(res, 404, { error: 'Not found' });
   } catch (err) {
     console.error(err);
     send(res, 500, { error: err.message });
   }
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/api/')) return handleApi(req, res);
+  // static files
+  const rel = url.pathname === '/' ? '/index.html' : url.pathname;
+  const file = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+  if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    res.writeHead(404); return res.end('Not found');
+  }
+  res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+  fs.createReadStream(file).pipe(res);
 });
 
 function loadDotEnv(file) {
@@ -253,4 +258,4 @@ if (require.main === module) {
   server.listen(cfg.port, () => console.log(`Jotter running on http://localhost:${cfg.port}  (LLM: ${cfg.llmModel} @ ${cfg.llmBase})`));
 }
 
-module.exports = { server, parseJsonLoose };
+module.exports = { server, handleApi, parseJsonLoose };

@@ -25,18 +25,23 @@ node server.js           # needs Node 18+
 
 Open http://localhost:3000. Browsers allow the microphone on localhost; on a phone you need HTTPS, so deploy it.
 
-## 3. Deploy (so it works on your phone)
+## 3. Deploy to Vercel (so it works on your phone)
 
-Any host that runs Node works. Easiest free option is **Render**:
-
-1. Push this folder to a GitHub repo.
-2. On render.com: New > Web Service > pick the repo. Build command: *(empty)*. Start command: `node server.js`.
-3. Under Environment, add `TODOIST_API_TOKEN`, `LLM_API_KEY`, `APP_PASSCODE`.
-4. Open the `https://…onrender.com` URL on your phone, enter the passcode, then
+1. On vercel.com: **Add New > Project**, import `todoist-input` from GitHub.
+2. Leave Framework Preset as **Other** and the build settings as they are (`vercel.json` handles them).
+3. Under **Environment Variables**, add `TODOIST_API_TOKEN`, `LLM_API_KEY` and `APP_PASSCODE`
+   (plus any other values from `.env.example` you changed). Click **Deploy**.
+4. Open the `https://….vercel.app` URL on your phone, enter the passcode, then
    **Add to Home Screen** (Safari share menu on iPhone, ⋮ menu in Chrome on Android).
 
-Note: Render's free tier sleeps after ~15 min idle, so the first open after a break can take ~30-50 s.
-A paid tier, Railway, Fly.io, or a home machine behind Tailscale avoids that.
+After that, every push to `main` redeploys automatically. If you change an environment variable, redeploy
+from the Vercel dashboard (Deployments > ⋯ > Redeploy) for it to take effect.
+
+How it maps onto Vercel: `public/` is served as static files and `api/*.js` become serverless functions
+that reuse the code in `server.js`. Vercel caps uploads at 4.5 MB, so the app records at a low bitrate,
+which allows roughly 15 minutes per note.
+
+Any other Node host works too (Render, Railway, Fly.io): start command `node server.js`.
 
 ## 4. Switching the AI model
 

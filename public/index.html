@@ -75,7 +75,8 @@ async function startRecording() {
     return status('Microphone blocked. Allow mic access, then tap the button.', true);
   }
   const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
-  recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  // Low bitrate keeps uploads under Vercel's 4.5 MB limit (~15 min of speech); fine for transcription.
+  recorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000, ...(type ? { mimeType: type } : {}) });
   chunks = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   recorder.onstop = upload;
