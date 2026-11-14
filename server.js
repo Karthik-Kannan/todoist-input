@@ -16,7 +16,7 @@ const cfg = {
   // Any OpenAI-compatible chat endpoint (Groq, OpenRouter, Zhipu GLM, Moonshot Kimi, Ollama...)
   llmBase: (process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, ''),
   llmKey: process.env.LLM_API_KEY || '',
-  llmModel: process.env.LLM_MODEL || 'llama-3.3-70b-versatile',
+  llmModel: process.env.LLM_MODEL || 'openai/gpt-oss-120b',
   llmJsonMode: (process.env.LLM_JSON_MODE || 'true') !== 'false',
   // Any OpenAI-compatible /audio/transcriptions endpoint (Groq Whisper by default)
   sttBase: (process.env.STT_BASE_URL || process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, ''),
@@ -110,6 +110,8 @@ async function extractTasks(note, projects, nowLocal, tz) {
     ],
   };
   if (cfg.llmJsonMode) body.response_format = { type: 'json_object' };
+  // gpt-oss models think before answering; keep that short so notes are processed quickly.
+  if (/gpt-oss/.test(cfg.llmModel)) body.reasoning_effort = 'low';
   const res = await fetch(cfg.llmBase + '/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${cfg.llmKey}`, 'Content-Type': 'application/json' },
