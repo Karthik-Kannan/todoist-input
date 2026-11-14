@@ -123,7 +123,8 @@ function render(data) {
   const tr = document.createElement('div'); tr.className = 'transcript'; tr.textContent = `“${data.transcript}”`; r.append(tr);
   for (const t of data.tasks) {
     const el = document.createElement('div'); el.className = 'task';
-    const b = document.createElement('b'); b.textContent = t.content;
+    const b = document.createElement(t.url ? 'a' : 'b'); b.textContent = t.content;
+    if (t.url) { b.href = t.url; b.target = '_blank'; b.rel = 'noopener'; b.style.cssText = 'display:block;font-weight:700;color:inherit'; }
     const m = document.createElement('div'); m.className = 'meta';
     m.textContent = [t.project, t.priority !== 'p4' && t.priority, t.due].filter(Boolean).join(' · ');
     el.append(b, m); r.append(el);

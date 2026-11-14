@@ -4,7 +4,7 @@ const http = require('http');
 const assert = require('assert');
 
 const created = [], deleted = [];
-let llmRequest;
+let llmRequest, noId = false;
 const mock = http.createServer((req, res) => {
   let body = []; req.on('data', (c) => body.push(c)); req.on('end', () => {
     body = Buffer.concat(body);
@@ -15,6 +15,7 @@ const mock = http.createServer((req, res) => {
     }
     if (req.url === '/todoist/tasks' && req.method === 'POST') {
       const t = JSON.parse(body); if (t.due_string === 'gibberish') return json(400, { error: 'bad due' });
+      if (noId) return json(200, { results: [] });
       created.push(t); return json(200, { id: 't' + created.length, ...t, due: t.due_string ? { string: t.due_string } : null });
     }
     if (req.url.startsWith('/todoist/tasks/') && req.method === 'DELETE') { deleted.push(req.url.split('/').pop()); res.writeHead(204); return res.end(); }
@@ -64,6 +65,12 @@ mock.listen(0, async () => {
 
       const u = await fetch(app + '/api/undo', { method: 'POST', headers: { 'X-Passcode': 'secret', 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ['t1', 't2'] }) });
       assert.strictEqual(u.status, 200); assert.deepStrictEqual(deleted, ['t1', 't2']);
+      assert(data.tasks[0].url.endsWith('/task/t1'), 'task link returned');
+
+      // A 200 without a task id (e.g. a redirected request) must be reported as a failure, not success.
+      noId = true;
+      const bad = await fetch(app + '/api/jot', { method: 'POST', headers: { 'X-Passcode': 'secret', 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'x' }) });
+      assert.strictEqual(bad.status, 500, 'missing task id is an error');
       console.log('All tests passed');
     } catch (e) { console.error('FAIL:', e.message); process.exitCode = 1; }
     server.close(); mock.close();

@@ -36,6 +36,7 @@ async function todoist(method, p, body) {
     method,
     headers: { Authorization: `Bearer ${cfg.todoistToken}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
+    redirect: 'manual',
   });
   if (!res.ok) throw new Error(`Todoist ${method} ${p} failed: ${res.status} ${await res.text()}`);
   return res.status === 204 ? null : res.json().catch(() => null);
@@ -164,8 +165,13 @@ async function createTasks(tasks, projects) {
       payload.description = [payload.description, `Due: ${t.due_string}`].filter(Boolean).join('\n');
       created = await todoist('POST', '/tasks', payload);
     }
+    if (!created || !created.id) {
+      throw new Error('Todoist did not confirm the task was created. Response: ' + JSON.stringify(created).slice(0, 300));
+    }
+    console.log(`Created task ${created.id} "${t.content}" in ${names[t.project_id] || t.project_id}${payload.due_string ? ` due ${payload.due_string}` : ''}`);
     out.push({
-      id: created?.id,
+      id: created.id,
+      url: `https://app.todoist.com/app/task/${created.id}`,
       content: t.content,
       project: names[t.project_id] || 'Inbox',
       priority: `p${t.userPriority}`,
