@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#db4c3f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jotter">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<title>Jotter</title>
+<style>
+  :root { --red: #db4c3f; --bg: #fff; --fg: #202020; --muted: #808080; --card: #f5f5f5; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1e1e1e; --fg: #eee; --muted: #999; --card: #2a2a2a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; font: 16px/1.4 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg);
+         display: flex; flex-direction: column; align-items: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); }
+  main { width: 100%; max-width: 480px; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  #status { color: var(--muted); min-height: 1.4em; text-align: center; margin-top: 8vh; }
+  #timer { font-size: 40px; font-variant-numeric: tabular-nums; }
+  #mic { width: 160px; height: 160px; border-radius: 50%; border: 0; background: var(--red); color: #fff; font-size: 18px; font-weight: 600;
+         box-shadow: 0 6px 24px rgba(219,76,63,.4); cursor: pointer; }
+  #mic.rec { animation: pulse 1.4s infinite; }
+  #mic:disabled { opacity: .5; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(219,76,63,.5); } 50% { box-shadow: 0 0 0 24px rgba(219,76,63,0); } }
+  #results { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+  .task { background: var(--card); border-radius: 10px; padding: 12px 14px; }
+  .task b { display: block; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .transcript { color: var(--muted); font-size: 14px; font-style: italic; }
+  .row { display: flex; gap: 8px; width: 100%; }
+  button.secondary { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--muted); background: transparent; color: var(--fg); font-size: 16px; }
+  input { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--muted); background: transparent; color: var(--fg); font-size: 16px; }
+  .err { color: var(--red); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div id="status">Starting recorder…</div>
+  <div id="timer" hidden>0:00</div>
+  <button id="mic">Tap to record</button>
+  <div id="results"></div>
+  <div class="row" id="after" hidden>
+    <button class="secondary" id="undo">Undo</button>
+    <button class="secondary" id="again">Record another</button>
+  </div>
+  <form class="row" id="typeForm">
+    <input id="typed" placeholder="…or type a note" autocomplete="off">
+    <button class="secondary" style="flex:0 0 auto">Add</button>
+  </form>
+  <form class="row" id="passForm" hidden>
+    <input id="pass" type="password" placeholder="App passcode">
+    <button class="secondary" style="flex:0 0 auto">Save</button>
+  </form>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const store = { get: (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let recorder, chunks = [], stream, timerId, startedAt, lastIds = [];
+
+function status(msg, isErr) { $('status').textContent = msg; $('status').className = isErr ? 'err' : ''; }
+
+function headers(extra = {}) {
+  return { 'X-Passcode': store.get('passcode'), 'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone,
+           'X-Local-Time': new Date().toString(), ...extra };
+}
+
+async function startRecording() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    return status('Microphone blocked. Allow mic access, then tap the button.', true);
+  }
+  const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+  recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  chunks = [];
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.onstop = upload;
+  recorder.start();
+  startedAt = Date.now();
+  $('timer').hidden = false; $('after').hidden = true; $('results').innerHTML = '';
+  timerId = setInterval(() => { const s = Math.floor((Date.now() - startedAt) / 1000); $('timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
+  $('mic').textContent = 'Tap when done'; $('mic').classList.add('rec');
+  status('Listening…');
+}
+
+function stopRecording() {
+  clearInterval(timerId);
+  $('mic').classList.remove('rec'); $('mic').disabled = true; $('mic').textContent = 'Working…';
+  recorder.stop();
+  stream.getTracks().forEach((t) => t.stop());
+}
+
+async function upload() {
+  const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+  await send(blob, blob.type.split(';')[0]);
+}
+
+async function send(body, contentType) {
+  status('Transcribing and creating tasks…');
+  $('mic').disabled = true;
+  try {
+    const res = await fetch('/api/jot', { method: 'POST', headers: headers({ 'Content-Type': contentType }), body });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { $('passForm').hidden = false; throw new Error('Enter the app passcode below, then try again.'); }
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    render(data);
+  } catch (e) {
+    status(e.message, true);
+  } finally {
+    $('mic').disabled = false; $('mic').textContent = 'Tap to record'; $('timer').hidden = true;
+  }
+}
+
+function render(data) {
+  lastIds = data.tasks.map((t) => t.id).filter(Boolean);
+  status(`Added ${data.tasks.length} task${data.tasks.length === 1 ? '' : 's'} to Todoist ✓`);
+  const r = $('results'); r.innerHTML = '';
+  const tr = document.createElement('div'); tr.className = 'transcript'; tr.textContent = `“${data.transcript}”`; r.append(tr);
+  for (const t of data.tasks) {
+    const el = document.createElement('div'); el.className = 'task';
+    const b = document.createElement('b'); b.textContent = t.content;
+    const m = document.createElement('div'); m.className = 'meta';
+    m.textContent = [t.project, t.priority !== 'p4' && t.priority, t.due].filter(Boolean).join(' · ');
+    el.append(b, m); r.append(el);
+  }
+  $('after').hidden = false; $('undo').disabled = !lastIds.length;
+}
+
+$('mic').onclick = () => (recorder && recorder.state === 'recording' ? stopRecording() : startRecording());
+$('again').onclick = startRecording;
+$('undo').onclick = async () => {
+  $('undo').disabled = true;
+  const res = await fetch('/api/undo', { method: 'POST', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ ids: lastIds }) });
+  if (res.ok) { $('results').innerHTML = ''; $('after').hidden = true; status('Removed those tasks.'); } else status('Undo failed.', true);
+};
+$('typeForm').onsubmit = (e) => { e.preventDefault(); const text = $('typed').value.trim(); if (!text) return; $('typed').value = ''; send(JSON.stringify({ text }), 'application/json'); };
+$('passForm').onsubmit = (e) => { e.preventDefault(); store.set('passcode', $('pass').value); $('passForm').hidden = true; status('Saved. Tap to record.'); };
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+// Opening the app starts recording right away (falls back to a tap if the browser needs one).
+(async () => {
+  const ping = await fetch('/api/ping', { headers: headers() }).catch(() => null);
+  if (ping && ping.status === 401) { $('passForm').hidden = false; return status('Enter the app passcode to start.'); }
+  startRecording().catch(() => status('Tap to record.'));
+})();
+</script>
+</body>
+</html>

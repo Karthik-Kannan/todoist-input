@@ -1,0 +1,9 @@
+{
+  "name": "todoist-jotter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Record a voice note, turn it into Todoist tasks.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "test": "node test.js" },
+  "engines": { "node": ">=18" }
+}
