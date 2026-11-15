@@ -26,9 +26,9 @@ const mock = http.createServer((req, res) => {
     if (req.url === '/ai/chat/completions') {
       llmRequest = JSON.parse(body);
       const content = '```json\n' + JSON.stringify({ tasks: [
-        { content: 'Email Sarah the Q3 deck', description: '', project_id: 'work1', priority: 1, due_string: 'friday' },
-        { content: 'Buy milk', project_id: 'home1', priority: 4, due_string: 'tomorrow' },
-        { content: 'Fix the leaky tap', project_id: 'nonexistent', priority: '3', due_string: 'gibberish' },
+        { content: 'Email Sarah the Q3 deck', description: '', project_id: 'work1', priority: 'p1', due_string: 'friday' },
+        { content: 'Buy milk', project_id: 'home1', priority: 'none', due_string: 'tomorrow' },
+        { content: 'Fix the leaky tap', project_id: 'nonexistent', priority: 'p3', due_string: 'gibberish' },
       ] }) + '\n```';
       return json(200, { choices: [{ message: { content } }] });
     }

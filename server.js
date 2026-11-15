@@ -95,10 +95,11 @@ Rules:
 - Split the note into separate, actionable tasks. One task per distinct action. Don't invent tasks that weren't said.
 - "content": short imperative title (max ~12 words). Put any extra detail from the note in "description" (or "").
 - "project_id": the id of the best-matching project from the list above. If nothing clearly fits, use the Inbox id.
-- "priority": 1 = urgent/critical, 2 = high, 3 = medium, 4 = normal (default 4 unless urgency is implied).
+- "priority": "none" by default. Only set "p1" (urgent/critical/ASAP), "p2" (high/important) or "p3" (medium/low-ish)
+  when the note explicitly says how urgent or important the task is, or names a priority ("priority one", "p2"). A due date alone is NOT urgency.
 - "due_string": a short English due phrase Todoist understands, e.g. "today", "tomorrow 5pm", "next monday", "every friday", "Dec 3". Use "" if no timing is stated or implied. "ASAP"/"urgent" means "today".
 Reply with JSON only, no prose, exactly in this shape:
-{"tasks":[{"content":"...","description":"...","project_id":"...","priority":4,"due_string":"..."}]}`;
+{"tasks":[{"content":"...","description":"...","project_id":"...","priority":"none","due_string":"..."}]}`;
 }
 
 async function extractTasks(note, projects, nowLocal, tz) {
@@ -129,7 +130,8 @@ async function extractTasks(note, projects, nowLocal, tz) {
   return tasks
     .filter((t) => t && typeof t.content === 'string' && t.content.trim())
     .map((t) => {
-      const p = Math.min(4, Math.max(1, parseInt(t.priority, 10) || 4));
+      const m = String(t.priority ?? '').match(/[1-3]/);
+      const p = m ? Number(m[0]) : 4; // 4 = Todoist's default (no priority)
       return {
         content: t.content.trim(),
         description: typeof t.description === 'string' ? t.description.trim() : '',
