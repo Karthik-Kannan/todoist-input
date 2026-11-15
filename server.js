@@ -17,6 +17,10 @@ const cfg = {
   llmBase: (process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, ''),
   llmKey: process.env.LLM_API_KEY || '',
   llmModel: process.env.LLM_MODEL || 'openai/gpt-oss-120b',
+  // Plain-English routing rules for picking projects. Override with the PROJECT_RULES env var.
+  projectRules: process.env.PROJECT_RULES ||
+    'Chores, errands, household tasks and bills/payments go to the home project (whatever it is called, e.g. Home, House, Household). ' +
+    'Anything tech-related (software, code, computers, devices, IT, accounts/logins) goes to the Work project.',
   llmJsonMode: (process.env.LLM_JSON_MODE || 'true') !== 'false',
   // Any OpenAI-compatible /audio/transcriptions endpoint (Groq Whisper by default)
   sttBase: (process.env.STT_BASE_URL || process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/$/, ''),
@@ -95,6 +99,7 @@ Rules:
 - Split the note into separate, actionable tasks. One task per distinct action. Don't invent tasks that weren't said.
 - "content": short imperative title (max ~12 words). Put any extra detail from the note in "description" (or "").
 - "project_id": the id of the best-matching project from the list above. If nothing clearly fits, use the Inbox id.
+  The user's own routing rules (follow these first): ${cfg.projectRules}
 - "priority": "none" by default. Only set "p1" (urgent/critical/ASAP), "p2" (high/important) or "p3" (medium/low-ish)
   when the note explicitly says how urgent or important the task is, or names a priority ("priority one", "p2"). A due date alone is NOT urgency.
 - "due_string": a short English due phrase Todoist understands, e.g. "today", "tomorrow 5pm", "next monday", "every friday", "Dec 3". Use "" if no timing is stated or implied. "ASAP"/"urgent" means "today".

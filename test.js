@@ -53,6 +53,7 @@ mock.listen(0, async () => {
       assert(llmRequest.messages[0].content.includes('id=home1 | Home'), 'projects from page 2 sent to LLM');
       assert(!llmRequest.messages[0].content.includes('Old'), 'archived projects excluded');
       assert(llmRequest.messages[0].content.includes('Asia/Kolkata'));
+      assert(llmRequest.messages[0].content.includes('bills/payments go to the home project'), 'project rules in prompt');
       assert.deepStrictEqual(created[0], { content: 'Email Sarah the Q3 deck', project_id: 'work1', priority: 4, due_string: 'friday', due_lang: 'en' });
       assert.strictEqual(created[1].priority, 1);
       assert.strictEqual(created[2].project_id, 'inbox1', 'unknown project falls back to Inbox');

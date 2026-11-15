@@ -69,7 +69,8 @@ If a provider rejects JSON mode, set `LLM_JSON_MODE=false`.
 ## How it decides
 
 - **Projects**: fetched live from Todoist (cached 5 min), sub-projects shown as `Parent / Child`.
-  If nothing fits, the task goes to your Inbox. Naming projects clearly helps.
+  Built-in rules: chores, errands and bills go to your home project; anything tech goes to Work.
+  Change them with the `PROJECT_RULES` environment variable (plain English). If nothing fits, the task goes to your Inbox.
 - **Priority**: none by default. p1/p2/p3 only when the note explicitly says how urgent or important it is.
 - **Due date**: a natural phrase like "tomorrow 5pm" or "every friday", parsed by Todoist in your timezone.
   If Todoist can't parse it, the task is still created with the phrase in its description.
